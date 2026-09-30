@@ -7,6 +7,7 @@
 <meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Luckee Skills</title>
+<link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon.png">
 <link rel="icon" type="image/png" href="icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -79,6 +80,14 @@ textarea{resize:vertical;}
 .pk-item .pk-name{font-weight:600;}
 .pk-item .pk-tags{margin-top:5px;}
 .pk-hint{color:var(--muted); font-size:13px; text-align:center; padding:8px 0;}
+
+#installBanner{position:fixed;left:12px;right:12px;bottom:calc(12px + env(safe-area-inset-bottom,0px));z-index:9999;background:#0a0a0a;color:#fff;border-radius:18px;padding:14px 16px;box-shadow:0 8px 30px rgba(0,0,0,.35);display:none;font-size:15px;line-height:1.4}
+#installBanner .ib-row{display:flex;align-items:center;gap:12px}
+#installBanner img{width:48px;height:48px;border-radius:12px;flex:none}
+#installBanner b{color:#e47149}
+#installBanner .ib-btn{background:#e47149;color:#fff;border:0;border-radius:12px;padding:10px 14px;font-size:15px;font-weight:600;margin-top:10px;width:100%}
+#installBanner .ib-x{background:none;border:0;color:#aaa;font-size:22px;margin-left:auto;align-self:flex-start;padding:0 4px}
+#installBanner .ib-steps{margin-top:8px;color:#ddd}
 </style>
 </head>
 <body>
@@ -185,6 +194,8 @@ textarea{resize:vertical;}
     </div>
 
     <div id="adminDishesScreen">
+      <button class="primary-btn big-add" id="shareAppBtn" style="background:#0a0a0a;margin-bottom:10px;">📤 Поделиться ссылкой с поварами</button>
+      <div id="shareMsg" style="display:none;font-size:13px;color:#1f7a4d;margin:-4px 0 10px;text-align:center;"></div>
       <button class="primary-btn big-add" id="addDishBtn">+ Создать ТТК (тех.карту)</button>
       <div class="pillrow" id="adminDishStationPills"></div>
       <div id="adminDishList"></div>
@@ -941,6 +952,67 @@ function openDishEditor(dish){
   }
   render();
 }
+</script>
+
+<div id="installBanner">
+  <div class="ib-row"><img src="icon.png" alt=""><div><b>Luckee Skills</b><br>Установите приложение на телефон</div><button class="ib-x" id="ibClose" aria-label="Закрыть">×</button></div>
+  <div id="ibBody"></div>
+</div>
+<script>
+(function(){
+  var standalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+  if (standalone) return;
+  try{ if (Number(localStorage.getItem('ibHiddenUntil')||0) > Date.now()) return; }catch(e){}
+  if ('serviceWorker' in navigator) { navigator.serviceWorker.register('sw.js').catch(function(){}); }
+  var ua = navigator.userAgent || '';
+  var isIOS = /iPhone|iPad|iPod/.test(ua) || (navigator.platform==='MacIntel' && navigator.maxTouchPoints>1);
+  var inApp = /FBAN|FBAV|Instagram|Line\/|WhatsApp|Telegram|CriOS|FxiOS|EdgiOS/.test(ua);
+  var el = document.getElementById('installBanner'), body = document.getElementById('ibBody');
+  document.getElementById('ibClose').onclick = function(){ el.style.display='none'; try{ localStorage.setItem('ibHiddenUntil', String(Date.now()+3*24*3600*1000)); }catch(e){} };
+  if (isIOS) {
+    body.innerHTML = inApp
+      ? '<div class="ib-steps">Сейчас ссылка открыта внутри другого приложения. Нажмите <b>⋯</b> или <b>⬆</b> и выберите <b>«Открыть в Safari»</b>, там появится установка.</div>'
+      : '<div class="ib-steps">Нажмите <b>«Поделиться» ⬆</b> внизу экрана → <b>«На экран Домой»</b> → <b>«Добавить»</b>.</div>';
+    setTimeout(function(){ el.style.display='block'; }, 1200);
+    return;
+  }
+  var deferred = null;
+  window.addEventListener('beforeinstallprompt', function(e){
+    e.preventDefault(); deferred = e;
+    body.innerHTML = '<button class="ib-btn" id="ibInstall">Установить</button>';
+    document.getElementById('ibInstall').onclick = function(){
+      deferred.prompt();
+      deferred.userChoice.finally(function(){ el.style.display='none'; deferred = null; });
+    };
+    el.style.display='block';
+  });
+  window.addEventListener('appinstalled', function(){ el.style.display='none'; });
+  setTimeout(function(){
+    if (deferred || el.style.display==='block') return;
+    if (/Android/.test(ua)) {
+      body.innerHTML = '<div class="ib-steps">Откройте меню <b>⋮</b> справа вверху → <b>«Добавить на главный экран»</b> или <b>«Установить приложение»</b>.</div>';
+      el.style.display='block';
+    }
+  }, 4000);
+})();
+</script>
+
+<script>
+(function(){
+  var APP_LINK = 'https://saidysupov350-dev.github.io/luckee-skills/';
+  var TEXT = 'Luckee Skills — тех.карты и тесты для поваров 👨‍🍳\nОткройте ссылку, введите имя, ресторан и станцию. Приложение можно добавить на экран телефона.';
+  var btn = document.getElementById('shareAppBtn'); if(!btn) return;
+  var msg = document.getElementById('shareMsg');
+  function show(t){ msg.textContent=t; msg.style.display='block'; setTimeout(function(){ msg.style.display='none'; }, 3000); }
+  btn.onclick = async function(){
+    if (navigator.share) {
+      try { await navigator.share({ title:'Luckee Skills', text: TEXT, url: APP_LINK }); } catch(e){}
+      return;
+    }
+    try { await navigator.clipboard.writeText(TEXT + '\n' + APP_LINK); show('Ссылка скопирована — вставьте её в чат'); }
+    catch(e){ prompt('Скопируйте ссылку:', APP_LINK); }
+  };
+})();
 </script>
 </body>
 </html>
