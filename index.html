@@ -1014,5 +1014,200 @@ function openDishEditor(dish){
   };
 })();
 </script>
+<!-- ===== Luckee Skills: фото блюд ===== -->
+<style>
+.card.lk-has{position:relative; padding-right:86px; min-height:86px;}
+.card.lk-has.lk-open{padding-right:16px;}
+.lk-thumb{position:absolute; right:12px; top:12px; width:62px; height:62px; border-radius:10px; object-fit:cover; background:#eceeea;}
+.card.lk-open .lk-thumb{display:none;}
+.lk-big{display:block; width:100%; aspect-ratio:4/3; object-fit:cover; border-radius:12px; margin:0 0 10px; background:#eceeea;}
+.lk-mini{width:46px; height:46px; border-radius:8px; object-fit:cover; flex:none; background:#eceeea;}
+.card.row .lk-mini + div{flex:1; min-width:0;}
+.lk-pf{display:flex; gap:12px; align-items:center;}
+.lk-prev{width:88px; height:88px; border-radius:12px; flex:none; object-fit:cover; background:var(--bg); border:1px dashed var(--border); display:flex; align-items:center; justify-content:center; font-size:12px; color:var(--muted); text-align:center; padding:4px;}
+.lk-btns{display:flex; flex-direction:column; gap:6px; flex:1;}
+.lk-btns .ghost-btn{text-align:center; padding:9px; display:block;}
+.lk-note{font-size:12px; color:var(--muted); margin-top:6px;}
+</style>
+<script>
+(function(){
+  var PHOTOS = {};
+  try { PHOTOS = JSON.parse(localStorage.getItem('lkPhotos') || '{}') || {}; } catch (e) {}
+  var EDIT = null;
+
+  function cachePhotos(){ try { localStorage.setItem('lkPhotos', JSON.stringify(PHOTOS)); } catch (e) {} }
+  function photoUrl(fid, w){ return 'https://drive.google.com/thumbnail?id=' + encodeURIComponent(fid) + '&sz=w' + (w || 800); }
+  function makeImg(fid, w, cls){
+    var i = document.createElement('img');
+    i.className = cls; i.alt = ''; i.loading = 'lazy'; i.decoding = 'async';
+    i.dataset.fid = fid; i.src = photoUrl(fid, w);
+    i.onerror = function(){ if (!i.dataset.fb) { i.dataset.fb = '1'; i.src = 'https://lh3.googleusercontent.com/d/' + fid + '=w' + (w || 800); } };
+    return i;
+  }
+  function allDishes(){ try { return Array.isArray(DISHES) ? DISHES : []; } catch (e) { return []; } }
+  function dishFromCard(card){
+    var el = card.querySelector('.name'); if (!el) return null;
+    var c = el.cloneNode(true);
+    c.querySelectorAll('.badge').forEach(function(x){ x.remove(); });
+    var t = c.textContent.trim().toLowerCase();
+    var list = allDishes(), best = null;
+    for (var k = 0; k < list.length; k++) {
+      var n = String(list[k].name || '').trim().toLowerCase();
+      if (!n) continue;
+      if (n === t) return list[k];
+      if (t.slice(-n.length) === n && (!best || n.length > String(best.name).length)) best = list[k];
+    }
+    return best;
+  }
+  function fidFor(d){ return d && d.id ? PHOTOS[String(d.id)] : null; }
+
+  function decorateStudy(){
+    var root = document.getElementById('dishList'); if (!root) return;
+    Array.prototype.forEach.call(root.children, function(card){
+      if (!card.classList.contains('card')) return;
+      var fid = fidFor(dishFromCard(card));
+      var th = card.querySelector('.lk-thumb');
+      if (!fid) {
+        if (th) th.remove();
+        if (card.classList.contains('lk-has')) card.classList.remove('lk-has');
+      } else {
+        if (!th || th.dataset.fid !== fid) { if (th) th.remove(); card.appendChild(makeImg(fid, 200, 'lk-thumb')); }
+        if (!card.classList.contains('lk-has')) card.classList.add('lk-has');
+      }
+      var det = card.querySelector('.detail');
+      var open = !!(det && det.classList.contains('open'));
+      if (open !== card.classList.contains('lk-open')) card.classList.toggle('lk-open', open);
+      if (open && fid) {
+        var big = det.querySelector('.lk-big');
+        if (!big || big.dataset.fid !== fid) { if (big) big.remove(); det.insertBefore(makeImg(fid, 1000, 'lk-big'), det.firstChild); }
+      }
+    });
+  }
+
+  function decorateAdmin(){
+    var root = document.getElementById('adminDishList'); if (!root) return;
+    Array.prototype.forEach.call(root.children, function(card){
+      if (!card.classList.contains('card')) return;
+      var fid = fidFor(dishFromCard(card));
+      var mi = card.querySelector('.lk-mini');
+      if (!fid) { if (mi) mi.remove(); return; }
+      if (mi && mi.dataset.fid === fid) return;
+      if (mi) mi.remove();
+      card.insertBefore(makeImg(fid, 120, 'lk-mini'), card.firstChild);
+    });
+  }
+
+  function compress(file){
+    return new Promise(function(resolve, reject){
+      var fr = new FileReader();
+      fr.onerror = function(){ reject(new Error('Не удалось прочитать фото')); };
+      fr.onload = function(){
+        var im = new Image();
+        im.onerror = function(){ reject(new Error('Этот формат фото не поддерживается')); };
+        im.onload = function(){
+          var max = 1280, w = im.naturalWidth, h = im.naturalHeight;
+          var k = Math.min(1, max / Math.max(w, h));
+          var c = document.createElement('canvas');
+          c.width = Math.round(w * k); c.height = Math.round(h * k);
+          c.getContext('2d').drawImage(im, 0, 0, c.width, c.height);
+          resolve(c.toDataURL('image/jpeg', 0.82).split(',')[1]);
+        };
+        im.src = fr.result;
+      };
+      fr.readAsDataURL(file);
+    });
+  }
+
+  function photoField(){
+    var box = document.createElement('div');
+    box.className = 'setup-field lk-photo-field';
+    var label = '<label>Фото блюда</label>';
+    if (!EDIT || !EDIT.id) {
+      box.innerHTML = label + '<div class="lk-note">Фото можно добавить после сохранения тех.карты: сохраните её и нажмите «Изменить».</div>';
+      return box;
+    }
+    var fid = PHOTOS[String(EDIT.id)];
+    box.innerHTML = label +
+      '<div class="lk-pf"><div class="lk-prev">Фото нет</div><div class="lk-btns">' +
+      '<label class="ghost-btn">Сфотографировать<input type="file" accept="image/*" capture="environment" hidden></label>' +
+      '<label class="ghost-btn">Выбрать из галереи<input type="file" accept="image/*" hidden></label>' +
+      '<button type="button" class="ghost-btn lk-del" style="color:#c0453a;">Удалить фото</button>' +
+      '</div></div><div class="lk-note lk-status"></div>';
+    var prev = box.querySelector('.lk-prev');
+    var status = box.querySelector('.lk-status');
+    var del = box.querySelector('.lk-del');
+    function showPrev(id){
+      if (id) { var im = makeImg(id, 300, 'lk-prev'); prev.replaceWith(im); prev = im; del.style.display = ''; }
+      else { var d = document.createElement('div'); d.className = 'lk-prev'; d.textContent = 'Фото нет'; prev.replaceWith(d); prev = d; del.style.display = 'none'; }
+    }
+    showPrev(fid);
+    box.querySelectorAll('input[type=file]').forEach(function(inp){
+      inp.onchange = async function(){
+        var f = inp.files && inp.files[0]; inp.value = '';
+        if (!f) return;
+        status.textContent = 'Загружаю фото…';
+        try {
+          var data = await compress(f);
+          var j = await apiPost({ action: 'savePhoto', code: getAdminCode(), id: EDIT.id, name: EDIT.name || '', data: data });
+          if (!j.fileId) throw new Error('Сервер не принял фото. Обновите скрипт.');
+          PHOTOS[String(EDIT.id)] = j.fileId; cachePhotos();
+          showPrev(j.fileId); status.textContent = 'Фото сохранено';
+          decorateStudy(); decorateAdmin();
+        } catch (e) {
+          status.textContent = '';
+          if (typeof handleAdminErr === 'function') handleAdminErr(e); else alert(e.message || e);
+        }
+      };
+    });
+    del.onclick = async function(){
+      if (!confirm('Удалить фото этого блюда?')) return;
+      status.textContent = 'Удаляю…';
+      try {
+        await apiPost({ action: 'deletePhoto', code: getAdminCode(), id: EDIT.id });
+        delete PHOTOS[String(EDIT.id)]; cachePhotos();
+        showPrev(null); status.textContent = 'Фото удалено';
+        decorateStudy(); decorateAdmin();
+      } catch (e) {
+        status.textContent = '';
+        if (typeof handleAdminErr === 'function') handleAdminErr(e); else alert(e.message || e);
+      }
+    };
+    return box;
+  }
+
+  function decorateModal(){
+    var root = document.getElementById('modalRoot'); if (!root) return;
+    var nameInput = root.querySelector('#dName');
+    if (!nameInput || root.querySelector('.lk-photo-field')) return;
+    var field = nameInput.closest('.setup-field');
+    if (field && field.parentNode) field.parentNode.insertBefore(photoField(), field.nextSibling);
+  }
+
+  if (typeof openDishEditor === 'function') {
+    var origOpen = openDishEditor;
+    openDishEditor = function(d){ EDIT = d || null; return origOpen.apply(this, arguments); };
+  }
+
+  var queued = false;
+  function decorateAll(){
+    if (queued) return; queued = true;
+    requestAnimationFrame(function(){ queued = false; decorateStudy(); decorateAdmin(); decorateModal(); });
+  }
+  ['dishList', 'adminDishList', 'modalRoot'].forEach(function(id){
+    var el = document.getElementById(id);
+    if (el) new MutationObserver(decorateAll).observe(el, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] });
+  });
+
+  async function loadPhotos(){
+    try {
+      var j = await apiGet('photos');
+      if (j && j.photos && typeof j.photos === 'object') { PHOTOS = j.photos; cachePhotos(); decorateAll(); }
+    } catch (e) { console.warn('photos not loaded', e); }
+  }
+  decorateAll();
+  loadPhotos();
+})();
+</script>
+
 </body>
 </html>
