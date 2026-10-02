@@ -1883,6 +1883,85 @@ Luckee Skills — код поиска в тех.карте
   setup('dishList', null);
 })();
 </script>
+<!-- ===== Luckee Skills: защита тех.карт ===== -->
+<style>
+body{-webkit-user-select:none; user-select:none; -webkit-touch-callout:none;}
+input, textarea, select, [contenteditable]{-webkit-user-select:text; user-select:text; -webkit-touch-callout:default;}
+img{-webkit-user-drag:none; user-drag:none; -webkit-touch-callout:none;}
+#lkWm{position:fixed; inset:0; z-index:9998; pointer-events:none; background-repeat:repeat; opacity:.14;}
+#lkShield{position:fixed; inset:0; z-index:9999; display:none; align-items:center; justify-content:center; text-align:center; padding:24px; background:rgba(246,247,245,.96); color:#16201b; font:600 17px -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;}
+body.lk-hide #lkShield{display:flex;}
+body.lk-hide > *:not(#lkShield):not(#lkWm){filter:blur(22px);}
+@media print{ body *{display:none !important;} body::after{content:'Печать тех.карт запрещена'; display:block; font:20px sans-serif; padding:40px;} }
+</style>
+<script>
+(function(){
+  function who(){
+    var parts = [];
+    try {
+      var u = JSON.parse(localStorage.getItem('cookUser') || 'null') || {};
+      ['name', 'restaurant', 'station'].forEach(function(k){ if (u[k]) parts.push(String(u[k])); });
+      if (!parts.length) Object.keys(u).forEach(function(k){ var v = u[k]; if (typeof v === 'string' && v.length < 40 && !/code|pass|код/i.test(k)) parts.push(v); });
+    } catch (e) {}
+    if (!parts.length) parts.push('Luckee Yu');
+    return parts.join(' · ');
+  }
+  function stamp(){
+    var d = new Date(), p = function(n){ return (n < 10 ? '0' : '') + n; };
+    return p(d.getDate()) + '.' + p(d.getMonth() + 1) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+  }
+  function esc(s){ return String(s).replace(/[&<>"]/g, function(c){ return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;' }[c]; }); }
+
+  var wm = document.createElement('div');
+  wm.id = 'lkWm';
+  document.body.appendChild(wm);
+  function drawWm(){
+    var t = esc(who() + ' · ' + stamp());
+    var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="320" height="180">' +
+      '<text x="0" y="110" transform="rotate(-24 160 90)" font-family="-apple-system,Arial,sans-serif" font-size="15" font-weight="600" fill="#16201b">' + t + '</text></svg>';
+    wm.style.backgroundImage = 'url("data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg) + '")';
+  }
+  drawWm();
+  setInterval(drawWm, 30000);
+  window.addEventListener('storage', drawWm);
+  document.addEventListener('click', function(){ setTimeout(drawWm, 300); }, true);
+
+  var shield = document.createElement('div');
+  shield.id = 'lkShield';
+  shield.innerHTML = '🔒 Тех.карты Luckee Yu — конфиденциально.<br>Вернитесь в приложение, чтобы продолжить.';
+  document.body.appendChild(shield);
+  var hideTimer = null;
+  function hide(ms){
+    document.body.classList.add('lk-hide');
+    clearTimeout(hideTimer);
+    if (ms) hideTimer = setTimeout(function(){ document.body.classList.remove('lk-hide'); }, ms);
+  }
+  function show(){ clearTimeout(hideTimer); document.body.classList.remove('lk-hide'); }
+
+  document.addEventListener('visibilitychange', function(){ if (document.hidden) hide(); else setTimeout(show, 250); });
+  window.addEventListener('pagehide', function(){ hide(); });
+  window.addEventListener('blur', function(){ hide(); });
+  window.addEventListener('focus', function(){ setTimeout(show, 250); });
+  shield.addEventListener('click', show);
+
+  document.addEventListener('keydown', function(e){
+    var k = (e.key || '').toLowerCase();
+    if (k === 'printscreen' || (e.metaKey && e.shiftKey) || (e.ctrlKey && k === 'p') || (e.metaKey && k === 'p')) {
+      if (k === 'p') e.preventDefault();
+      hide(3000);
+    }
+  }, true);
+  document.addEventListener('keyup', function(e){ if ((e.key || '').toLowerCase() === 'printscreen') { try { navigator.clipboard.writeText(''); } catch (x) {} hide(3000); } }, true);
+
+  function inField(t){ return t && t.closest && t.closest('input, textarea, select, [contenteditable]'); }
+  ['copy', 'cut'].forEach(function(ev){
+    document.addEventListener(ev, function(e){ if (!inField(e.target)) { e.preventDefault(); try { e.clipboardData.setData('text/plain', 'Копирование тех.карт запрещено'); } catch (x) {} } }, true);
+  });
+  document.addEventListener('contextmenu', function(e){ if (!inField(e.target)) e.preventDefault(); }, true);
+  document.addEventListener('dragstart', function(e){ if (!inField(e.target)) e.preventDefault(); }, true);
+  document.addEventListener('selectstart', function(e){ if (!inField(e.target)) e.preventDefault(); }, true);
+})();
+</script>
 
 </body>
 </html>
