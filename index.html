@@ -1209,5 +1209,77 @@ function openDishEditor(dish){
 })();
 </script>
 
+<!-- ===== Luckee Skills: быстрый ввод ингредиентов ===== -->
+<script>
+(function(){
+  if (typeof openProductPicker !== 'function') return;
+  var MODE = null;
+  var UNITS = ['кг', 'л', 'шт', 'г', 'порц'];
+
+  document.addEventListener('click', function(e){
+    var t = e.target;
+    if (!t || !t.closest) return;
+    if (t.closest('#addIngBtn')) MODE = 'add';
+    else if (t.closest('[data-ing-pick]')) MODE = null;
+  }, true);
+
+  function escH(s){ var d = document.createElement('div'); d.textContent = s == null ? '' : s; return d.innerHTML; }
+
+  function askQty(prod, realPick){
+    var root = document.getElementById('pickerRoot');
+    var unit = prod.unit || 'кг';
+    root.innerHTML = '<div class="picker-bg"><div class="picker">' +
+      '<div class="picker-head"><div class="picker-title">' + escH(prod.name) + '</div>' +
+      '<button type="button" class="linkbtn" id="qtBack">Назад</button></div>' +
+      '<div class="setup-field"><label>Количество (нетто)</label>' +
+      '<div style="display:flex; gap:8px;">' +
+      '<input type="text" inputmode="decimal" id="qtVal" placeholder="0.000" autocomplete="off" style="flex:2;">' +
+      '<select id="qtUnit" style="flex:1;">' + UNITS.map(function(u){ return '<option' + (u === unit ? ' selected' : '') + '>' + u + '</option>'; }).join('') + '</select>' +
+      '</div></div>' +
+      '<button type="button" class="primary-btn" id="qtNext">Добавить и выбрать следующий</button>' +
+      '<button type="button" class="ghost-btn" id="qtDone" style="margin-top:8px;">Добавить и закончить</button>' +
+      '</div></div>';
+    var val = root.querySelector('#qtVal');
+    try { val.focus(); } catch (e) {}
+    root.querySelector('#qtBack').onclick = function(){ origPicker(qtyCallback(realPick)); };
+    function add(next){
+      var raw = String(val.value || '').replace(',', '.').trim();
+      var qty = raw === '' ? 0 : (parseFloat(raw) || 0);
+      var u = root.querySelector('#qtUnit').value;
+      root.innerHTML = '';
+      realPick(Object.assign({}, prod, { unit: u }));
+      var modal = document.getElementById('modalRoot');
+      var nets = modal.querySelectorAll('[data-ing-netto]');
+      var units = modal.querySelectorAll('[data-ing-unit]');
+      if (nets.length) nets[nets.length - 1].value = qty;
+      if (units.length) units[units.length - 1].value = u;
+      if (next) {
+        var btn = modal.querySelector('#addIngBtn');
+        if (btn) btn.click();
+      } else {
+        MODE = null;
+      }
+    }
+    root.querySelector('#qtNext').onclick = function(){ add(true); };
+    root.querySelector('#qtDone').onclick = function(){ add(false); };
+    val.addEventListener('keydown', function(e){ if (e.key === 'Enter') { e.preventDefault(); add(true); } });
+  }
+
+  function qtyCallback(realPick){
+    var cb = function(prod){ askQty(prod, realPick); };
+    cb.__lkQty = true;
+    return cb;
+  }
+
+  var origPicker = openProductPicker;
+  openProductPicker = function(onPick){
+    if (MODE === 'add' && typeof onPick === 'function' && !onPick.__lkQty) {
+      return origPicker.call(this, qtyCallback(onPick));
+    }
+    return origPicker.apply(this, arguments);
+  };
+})();
+</script>
+
 </body>
 </html>
