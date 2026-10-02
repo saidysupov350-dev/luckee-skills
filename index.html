@@ -1962,6 +1962,38 @@ body.lk-hide > *:not(#lkShield):not(#lkWm){filter:blur(22px);}
   document.addEventListener('selectstart', function(e){ if (!inField(e.target)) e.preventDefault(); }, true);
 })();
 </script>
+<!-- ===== Luckee Skills: водяной знак на заднем фоне ===== -->
+<style>#lkWm{display:none !important;}</style>
+<script>
+(function(){
+  var st = document.createElement('style');
+  document.head.appendChild(st);
+  function who(){
+    var parts = [];
+    try {
+      var u = JSON.parse(localStorage.getItem('cookUser') || 'null') || {};
+      ['name', 'restaurant', 'station'].forEach(function(k){ if (u[k]) parts.push(String(u[k])); });
+    } catch (e) {}
+    if (!parts.length) parts.push('Luckee Yu');
+    return parts.join(' · ');
+  }
+  function stamp(){
+    var d = new Date(), p = function(n){ return (n < 10 ? '0' : '') + n; };
+    return p(d.getDate()) + '.' + p(d.getMonth() + 1) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+  }
+  function esc(s){ return String(s).replace(/[&<>"]/g, function(c){ return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;' }[c]; }); }
+  function draw(){
+    var t = esc(who() + ' · ' + stamp());
+    var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="300" height="170">' +
+      '<text x="0" y="105" transform="rotate(-24 150 85)" font-family="-apple-system,Arial,sans-serif" font-size="13" font-weight="600" fill="#16201b" fill-opacity="0.07">' + t + '</text></svg>';
+    var url = 'url("data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg) + '")';
+    st.textContent = 'body, .card, .qcard, .modal, .picker, .tabs{background-image:' + url + ' !important; background-repeat:repeat !important;}';
+  }
+  draw();
+  setInterval(draw, 30000);
+  document.addEventListener('click', function(){ setTimeout(draw, 300); }, true);
+})();
+</script>
 
 </body>
 </html>
