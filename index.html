@@ -1512,6 +1512,124 @@ Luckee Skills — код поиска в тех.карте
   if (mroot) new MutationObserver(function(){ requestAnimationFrame(ensureEntry); }).observe(mroot, { childList: true, subtree: true });
 })();
 </script>
+<!-- ===== Luckee Skills: строка ввода ингредиента с кнопкой OK ===== -->
+<style>
+#modalRoot .lk-search-field, #modalRoot .lk-entry{display:none !important;}
+.lk-entryrow{border:2px solid var(--accent); border-radius:14px; padding:10px; margin:0 0 14px; background:var(--accent-light);}
+.lk-entryrow .pick-btn{width:100%;}
+.lk-erow2{display:flex; gap:6px; margin-top:8px; align-items:stretch;}
+.lk-eu{flex:1 1 70px;}
+.lk-eq{flex:2 1 90px; font-size:16px !important;}
+.lk-eok{flex:0 0 auto; width:auto !important; margin:0 !important; padding:0 22px !important;}
+.lk-eh{font-size:13px; color:var(--accent-dark); margin-top:6px; min-height:16px;}
+</style>
+<script>
+(function(){
+  if (typeof openProductPicker !== 'function') return;
+  var UNITS = ['кг', 'л', 'шт', 'г', 'порц'];
+  var DIRECT = null;
+  var E = { prod: null, unit: 'кг', qty: '' };
+
+  var prev = openProductPicker;
+  openProductPicker = function(onPick){
+    if (DIRECT) { var p = DIRECT; DIRECT = null; onPick(p); return; }
+    return prev.apply(this, arguments);
+  };
+
+  if (typeof openDishEditor === 'function') {
+    var prevOpen = openDishEditor;
+    openDishEditor = function(){ E = { prod: null, unit: 'кг', qty: '' }; return prevOpen.apply(this, arguments); };
+  }
+
+  function h(s){ var d = document.createElement('div'); d.textContent = s == null ? '' : s; return d.innerHTML; }
+
+  function parseQty(raw, unit){
+    var v = parseFloat(String(raw || '').replace(',', '.').trim());
+    if (!v || v < 0) return { qty: 0, note: '' };
+    if ((unit === 'кг' || unit === 'л') && v >= 10) {
+      var conv = Math.round(v) / 1000;
+      return { qty: conv, note: v + (unit === 'кг' ? ' г' : ' мл') + ' → запишется ' + conv.toFixed(3) + ' ' + unit };
+    }
+    if (unit === 'кг' || unit === 'л') return { qty: v, note: '= ' + Math.round(v * 1000) + (unit === 'кг' ? ' г' : ' мл') };
+    return { qty: v, note: '' };
+  }
+
+  function addIng(prod, qty, unit){
+    var modal = document.getElementById('modalRoot');
+    var btn = modal && modal.querySelector('#addIngBtn');
+    if (!btn) return false;
+    DIRECT = { name: prod.name, unit: unit, article: prod.article || '', kind: prod.kind || 'p' };
+    btn.click();
+    var nets = modal.querySelectorAll('[data-ing-netto]');
+    var units = modal.querySelectorAll('[data-ing-unit]');
+    if (nets.length) nets[nets.length - 1].value = qty;
+    if (units.length) units[units.length - 1].value = unit;
+    return true;
+  }
+
+  function buildEntry(){
+    var box = document.createElement('div');
+    box.className = 'lk-entryrow';
+    var name = E.prod ? h(E.prod.name) + (E.prod.article ? '<span class="pick-sub">№' + h(E.prod.article) + '</span>' : '') : 'Выбрать продукт…';
+    box.innerHTML =
+      '<button type="button" class="pick-btn lk-ep' + (E.prod ? '' : ' placeholder') + '"><span>' + name + '</span><span>▾</span></button>' +
+      '<div class="lk-erow2">' +
+      '<select class="lk-eu">' + UNITS.map(function(u){ return '<option' + (u === E.unit ? ' selected' : '') + '>' + u + '</option>'; }).join('') + '</select>' +
+      '<input type="text" inputmode="decimal" class="lk-eq" placeholder="напр. 200" autocomplete="off">' +
+      '<button type="button" class="primary-btn lk-eok">OK</button>' +
+      '</div><div class="lk-eh"></div>';
+    var q = box.querySelector('.lk-eq'), u = box.querySelector('.lk-eu'), hint = box.querySelector('.lk-eh');
+    q.value = E.qty;
+    function upd(){ E.qty = q.value; E.unit = u.value; hint.textContent = parseQty(q.value, u.value).note; }
+    q.addEventListener('input', upd);
+    u.addEventListener('change', upd);
+    upd();
+    box.querySelector('.lk-ep').onclick = function(){
+      var cb = function(prod){
+        E.prod = prod; E.unit = prod.unit || 'кг';
+        refresh(true);
+      };
+      cb.__lkQty = true;
+      prev(cb);
+    };
+    function ok(){
+      if (!E.prod) { alert('Сначала нажмите «Выбрать продукт…» и выберите продукт.'); return; }
+      var r = parseQty(q.value, u.value);
+      if (!r.qty) { alert('Введите количество.'); q.focus(); return; }
+      var prod = E.prod, unit = u.value;
+      E = { prod: null, unit: 'кг', qty: '' };
+      addIng(prod, r.qty, unit);
+      refresh(false);
+    }
+    box.querySelector('.lk-eok').onclick = ok;
+    q.addEventListener('keydown', function(e){ if (e.key === 'Enter') { e.preventDefault(); ok(); } });
+    return box;
+  }
+
+  function refresh(focusQty){
+    var modal = document.getElementById('modalRoot'); if (!modal) return;
+    var old = modal.querySelector('.lk-entryrow');
+    if (old) old.remove();
+    ensureEntry();
+    if (focusQty) { var q = modal.querySelector('.lk-eq'); if (q) try { q.focus(); } catch (e) {} }
+  }
+
+  function ensureEntry(){
+    var modal = document.getElementById('modalRoot'); if (!modal) return;
+    var addBtn = modal.querySelector('#addIngBtn'); if (!addBtn) return;
+    if (modal.querySelector('.lk-entryrow')) return;
+    var firstRow = modal.querySelector('.form-row');
+    var anchor = (firstRow && firstRow.parentNode === addBtn.parentNode) ? firstRow : null;
+    if (!anchor && firstRow) anchor = firstRow;
+    var box = buildEntry();
+    if (anchor) anchor.parentNode.insertBefore(box, anchor);
+    else addBtn.parentNode.insertBefore(box, addBtn);
+  }
+
+  var mroot = document.getElementById('modalRoot');
+  if (mroot) new MutationObserver(function(){ requestAnimationFrame(ensureEntry); }).observe(mroot, { childList: true, subtree: true });
+})();
+</script>
 
 </body>
 </html>
