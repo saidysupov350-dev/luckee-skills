@@ -1630,6 +1630,59 @@ Luckee Skills — код поиска в тех.карте
   if (mroot) new MutationObserver(function(){ requestAnimationFrame(ensureEntry); }).observe(mroot, { childList: true, subtree: true });
 })();
 </script>
+<!-- ===== Luckee Skills: выбор продукта как поисковик ===== -->
+<style>
+#pickerRoot #pkSearch:placeholder-shown ~ #pkList{display:none;}
+#pickerRoot #pkSearch:placeholder-shown ~ #pkKinds::after{content:'Начните вводить название, например «лук»'; display:block; flex-basis:100%; color:var(--muted); font-size:14px; margin-top:16px; text-align:center;}
+#pickerRoot #pkSearch{font-size:16px;}
+</style>
+<script>
+(function(){
+  var pr = document.getElementById('pickerRoot');
+  if (!pr) return;
+  var busy = false;
+
+  function norm(s){ return String(s || '').toLowerCase().replace(/ё/g, 'е'); }
+
+  function filterList(){
+    var s = pr.querySelector('#pkSearch'), list = pr.querySelector('#pkList');
+    if (!s || !list) return;
+    var q = norm(s.value).trim();
+    if (!q || /^\d+$/.test(q)) return;
+    var items = Array.prototype.slice.call(list.querySelectorAll('.pk-item'));
+    var scored = items.map(function(b){
+      var el = b.querySelector('.pk-name') || b;
+      var n = norm(el.textContent).trim();
+      var words = n.split(/[\s,.\-()«»"\/]+/);
+      var sc = n.indexOf(q) === 0 ? 0 : (words.some(function(w){ return w.indexOf(q) === 0; }) ? 1 : 2);
+      return { b: b, sc: sc, n: n };
+    });
+    scored.sort(function(a, b){ return a.sc - b.sc || a.n.localeCompare(b.n, 'ru'); });
+    scored.forEach(function(x){
+      x.b.style.display = (x.sc <= 1 || q.length >= 3) ? '' : 'none';
+      list.appendChild(x.b);
+    });
+  }
+
+  var obs = new MutationObserver(function(){
+    if (busy) return;
+    busy = true;
+    try {
+      var s = pr.querySelector('#pkSearch');
+      if (s && !s.dataset.lkf) {
+        s.dataset.lkf = '1';
+        s.placeholder = 'Поиск: начните вводить название';
+        try { s.focus(); } catch (e) {}
+      }
+      filterList();
+    } finally {
+      obs.takeRecords();
+      busy = false;
+    }
+  });
+  obs.observe(pr, { childList: true, subtree: true });
+})();
+</script>
 
 </body>
 </html>
