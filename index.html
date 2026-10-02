@@ -1844,6 +1844,45 @@ Luckee Skills — код поиска в тех.карте
   if (mroot) new MutationObserver(function(){ requestAnimationFrame(ensure); }).observe(mroot, { childList: true, subtree: true });
 })();
 </script>
+<!-- ===== Luckee Skills: поиск тех.карт ===== -->
+<style>
+.lk-dsearch{display:block; width:100%; font-size:16px; padding:12px 14px; border:1px solid var(--border); border-radius:12px; margin:0 0 10px; background:#fff;}
+</style>
+<script>
+(function(){
+  function norm(s){ return String(s || '').toLowerCase().replace(/ё/g, 'е'); }
+
+  function setup(listId, pillsId){
+    var list = document.getElementById(listId);
+    if (!list) return;
+    var input = document.createElement('input');
+    input.type = 'search';
+    input.className = 'lk-dsearch';
+    input.placeholder = '🔍 Найти тех.карту…';
+    input.autocomplete = 'off';
+    var anchor = (pillsId && document.getElementById(pillsId)) || list;
+    anchor.parentNode.insertBefore(input, anchor);
+
+    function apply(){
+      var q = norm(input.value).trim();
+      Array.prototype.forEach.call(list.children, function(c){
+        if (!c.classList || !c.classList.contains('card')) return;
+        var el = c.querySelector('.name');
+        var n = norm(el ? el.textContent : c.textContent).trim();
+        var words = n.split(/[\s,.\-()«»"\/]+/);
+        var ok = !q || n.indexOf(q) === 0 || words.some(function(w){ return w.indexOf(q) === 0; }) || (q.length >= 3 && n.indexOf(q) !== -1);
+        var want = ok ? '' : 'none';
+        if (c.style.display !== want) c.style.display = want;
+      });
+    }
+    input.addEventListener('input', apply);
+    new MutationObserver(function(){ if (input.value.trim()) apply(); }).observe(list, { childList: true });
+  }
+
+  setup('adminDishList', 'adminDishStationPills');
+  setup('dishList', null);
+})();
+</script>
 
 </body>
 </html>
