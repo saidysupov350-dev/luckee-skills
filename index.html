@@ -1281,5 +1281,142 @@ function openDishEditor(dish){
 })();
 </script>
 
+Luckee Skills — код поиска в тех.карте
+<!-- ===== Luckee Skills: поиск продуктов прямо в тех.карте ===== -->
+<style>
+#modalRoot .form-row:has(> .pick-btn.placeholder){display:none;}
+#modalRoot #addIngBtn{display:none;}
+.lk-search-field input{font-size:16px;}
+.lk-results{margin-top:8px; display:flex; flex-direction:column; gap:6px; max-height:320px; overflow:auto;}
+.lk-results:empty{display:none;}
+.lk-res{display:block; width:100%; text-align:left; background:var(--card); border:1px solid var(--border); border-radius:12px; padding:10px 12px; font:inherit; color:inherit; cursor:pointer;}
+.lk-res b{font-weight:600; font-size:15px;}
+.lk-res small{display:block; color:var(--muted); font-size:12px; margin-top:2px;}
+.lk-res.lk-new{color:var(--accent); font-weight:600; text-align:center;}
+.lk-created{background:var(--accent-light); color:var(--accent-dark); border-radius:12px; padding:10px 12px; font-size:14px; margin-bottom:12px;}
+</style>
+<script>
+(function(){
+  if (typeof openProductPicker !== 'function' || typeof getAllProducts !== 'function') return;
+  var UNITS = ['кг', 'л', 'шт', 'г', 'порц'];
+  var DIRECT = null, JUST_CREATED = null, QUERY = '';
+  function h(s){ var d = document.createElement('div'); d.textContent = s == null ? '' : s; return d.innerHTML; }
+  var prevPicker = openProductPicker;
+  openProductPicker = function(onPick){
+    if (DIRECT) { var p = DIRECT; DIRECT = null; onPick(p); return; }
+    return prevPicker.apply(this, arguments);
+  };
+  function addIngredient(prod, qty, unit){
+    var modal = document.getElementById('modalRoot');
+    var btn = modal && modal.querySelector('#addIngBtn');
+    if (!btn) return;
+    DIRECT = { name: prod.name, unit: unit, article: prod.article || '', kind: prod.kind || 'p' };
+    btn.click();
+    var nets = modal.querySelectorAll('[data-ing-netto]');
+    var units = modal.querySelectorAll('[data-ing-unit]');
+    if (nets.length) nets[nets.length - 1].value = qty;
+    if (units.length) units[units.length - 1].value = unit;
+    QUERY = '';
+    ensureSearch(true);
+  }
+  function askQty(prod){
+    var root = document.getElementById('pickerRoot');
+    var unit = prod.unit || 'кг';
+    root.innerHTML = '<div class="picker-bg"><div class="picker">' +
+      '<div class="picker-head"><div class="picker-title">' + h(prod.name) + '</div>' +
+      '<button type="button" class="linkbtn" id="lkqCancel">Отмена</button></div>' +
+      '<div class="setup-field"><label>Сколько (нетто)</label><div style="display:flex; gap:8px;">' +
+      '<input type="text" inputmode="decimal" id="lkqVal" placeholder="' + (unit === 'кг' || unit === 'л' ? '0.150' : '1') + '" autocomplete="off" style="flex:2; font-size:16px;">' +
+      '<select id="lkqUnit" style="flex:1;">' + UNITS.map(function(u){ return '<option' + (u === unit ? ' selected' : '') + '>' + u + '</option>'; }).join('') + '</select>' +
+      '</div></div>' +
+      '<button type="button" class="primary-btn" id="lkqOk">OK</button>' +
+      '</div></div>';
+    var val = root.querySelector('#lkqVal');
+    try { val.focus(); } catch (e) {}
+    function ok(){
+      var raw = String(val.value || '').replace(',', '.').trim();
+      var qty = raw === '' ? 0 : (parseFloat(raw) || 0);
+      var u = root.querySelector('#lkqUnit').value;
+      root.innerHTML = '';
+      addIngredient(prod, qty, u);
+    }
+    root.querySelector('#lkqOk').onclick = ok;
+    root.querySelector('#lkqCancel').onclick = function(){ root.innerHTML = ''; ensureSearch(true); };
+    val.addEventListener('keydown', function(e){ if (e.key === 'Enter') { e.preventDefault(); ok(); } });
+  }
+  function renderResults(box, q){
+    q = (q || '').trim().toLowerCase();
+    if (!q) { box.innerHTML = ''; return; }
+    var all = getAllProducts();
+    var list = all.filter(function(p){ return p.name.toLowerCase().indexOf(q) !== -1 || String(p.article || '').indexOf(q) !== -1; }).slice(0, 30);
+    var html = list.map(function(p, i){
+      var tags = [p.unit];
+      if (p.kind === 'pf') tags.push('полуфабрикат');
+      if (p.article) tags.push('№' + p.article);
+      return '<button type="button" class="lk-res" data-i="' + i + '"><b>' + h(p.name) + '</b><small>' + h(tags.join(' · ')) + '</small></button>';
+    }).join('');
+    html += '<button type="button" class="lk-res lk-new">+ Новый продукт «' + h(QUERY.trim()) + '»</button>';
+    box.innerHTML = html;
+    box.querySelectorAll('.lk-res[data-i]').forEach(function(b){
+      b.onclick = function(){ askQty(list[parseInt(b.dataset.i, 10)]); };
+    });
+    box.querySelector('.lk-new').onclick = function(){
+      if (typeof openNewProductForm === 'function') openNewProductForm(QUERY.trim(), function(prod){ askQty(prod); });
+    };
+  }
+  function ensureSearch(focus){
+    var modal = document.getElementById('modalRoot'); if (!modal) return;
+    var addBtn = modal.querySelector('#addIngBtn'); if (!addBtn) return;
+    var field = modal.querySelector('.lk-search-field');
+    if (!field) {
+      field = document.createElement('div');
+      field.className = 'setup-field lk-search-field';
+      field.innerHTML = '<label>Добавить продукт или полуфабрикат</label>' +
+        '<input type="text" class="lk-search" placeholder="Начните вводить название или артикул" autocomplete="off">' +
+        '<div class="lk-results"></div>';
+      addBtn.parentNode.insertBefore(field, addBtn);
+      var inp = field.querySelector('.lk-search');
+      var box = field.querySelector('.lk-results');
+      inp.value = QUERY;
+      inp.addEventListener('input', function(){ QUERY = inp.value; renderResults(box, QUERY); });
+      renderResults(box, QUERY);
+    }
+    if (focus) { var i2 = field.querySelector('.lk-search'); i2.value = QUERY; renderResults(field.querySelector('.lk-results'), QUERY); try { i2.focus(); } catch (e) {} }
+    var title = modal.querySelector('h3');
+    var isNew = title && title.textContent.indexOf('Новая') !== -1;
+    var save = modal.querySelector('#dSaveBtn');
+    if (save && isNew && save.textContent !== 'Создать тех.карту') save.textContent = 'Создать тех.карту';
+    if (!isNew && JUST_CREATED && !modal.querySelector('.lk-created') && title) {
+      var note = document.createElement('div');
+      note.className = 'lk-created';
+      note.textContent = '✅ Тех.карта создана. Добавьте фото блюда ниже и нажмите «Сохранить».';
+      title.parentNode.insertBefore(note, title.nextSibling);
+    }
+  }
+  if (typeof openDishEditor === 'function') {
+    var prevOpen = openDishEditor;
+    openDishEditor = function(d){
+      QUERY = '';
+      if (!(d && JUST_CREATED && String(d.id) === String(JUST_CREATED))) JUST_CREATED = null;
+      return prevOpen.apply(this, arguments);
+    };
+  }
+  if (typeof apiPost === 'function') {
+    var prevPost = apiPost;
+    apiPost = async function(p){
+      var j = await prevPost.apply(this, arguments);
+      if (p && p.action === 'saveDish' && !(p.dish && p.dish.id) && j && j.id) {
+        var nd = Object.assign({}, p.dish, { id: j.id });
+        JUST_CREATED = j.id;
+        setTimeout(function(){ try { openDishEditor(nd); } catch (e) {} }, 800);
+      }
+      return j;
+    };
+  }
+  var mroot = document.getElementById('modalRoot');
+  if (mroot) new MutationObserver(function(){ requestAnimationFrame(function(){ ensureSearch(false); }); }).observe(mroot, { childList: true, subtree: true });
+})();
+</script>
+
 </body>
 </html>
