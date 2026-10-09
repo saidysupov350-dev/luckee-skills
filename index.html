@@ -127,6 +127,12 @@ textarea{resize:vertical;}
 .ck-progress{height:8px; background:#e3e8e5; border-radius:6px; overflow:hidden; margin:4px 0 14px;}
 .ck-progress div{height:100%; background:var(--accent); width:0;}
 .secfield{width:100%; padding:12px 14px; border-radius:12px; border:1px solid var(--border); background:var(--card); font-size:15px; font-family:inherit; margin-bottom:12px;}
+
+.card .dthumb{float:right; width:56px; height:56px; border-radius:10px; object-fit:cover; margin:-2px 0 6px 10px; background:#eef1ef;}
+.dish-photo{display:block; width:100%; max-height:340px; object-fit:cover; border-radius:12px; margin-bottom:10px; background:#eef1ef;}
+.ph-box{display:flex; gap:10px; align-items:center; flex-wrap:wrap;}
+.ph-box img{width:96px; height:96px; object-fit:cover; border-radius:12px; background:#eef1ef;}
+.ph-note{font-size:12px; color:var(--muted);}
 </style>
 </head>
 <body>
@@ -162,7 +168,7 @@ textarea{resize:vertical;}
   <div class="msg" id="entryMsg" style="color:#c0453a; font-size:13px; margin-top:8px; min-height:16px;"></div>
   <button class="tile dark wide" data-sec="chef" style="margin-top:18px; width:100%;"><span class="ti">👨‍🍳</span>Для шефа и су-шефа</button>
   <button class="linkbtn" id="showAdminLoginBtn" style="display:block; margin:12px auto 0;">🔐 Я администратор</button>
-  <div style="text-align:center; color:#9aa79f; font-size:11px; margin-top:8px;">версия 11</div>
+  <div style="text-align:center; color:#9aa79f; font-size:11px; margin-top:8px;">версия 12</div>
 </div>
 
 <div id="adminLoginScreen" style="display:none; max-width:420px; margin:40px auto; padding:20px;">
@@ -238,7 +244,7 @@ textarea{resize:vertical;}
 <div id="adminScreen" style="display:none;">
   <div class="wrap">
     <div style="display:flex; justify-content:space-between; align-items:flex-start;">
-      <h1>Тех.карты (админ) <span style="font-size:11px; color:#9aa79f; font-weight:400;">v11</span></h1>
+      <h1>Тех.карты (админ) <span style="font-size:11px; color:#9aa79f; font-weight:400;">v12</span></h1>
       <button class="tab" id="adminLogoutBtn" style="width:auto; padding:8px 12px;">Выйти</button>
     </div>
 
@@ -280,6 +286,8 @@ async function apiPost(payload){
   if(!j.ok){ const e = new Error(j.error || 'Ошибка сервера'); e.auth = (j.auth===false); throw e; }
   return j;
 }
+let PHOTOS = (function(){ try{ return JSON.parse(localStorage.getItem('photosCache')||'{}') || {}; }catch(e){ return {}; } })();
+function photoUrl(fileId, w){ return 'https://drive.google.com/thumbnail?id=' + encodeURIComponent(fileId) + '&sz=w' + (w||800); }
 function getAdminCode(){ try{ return (JSON.parse(localStorage.getItem('cookUser')||'null')||{}).code || ''; }catch(e){ return ''; } }
 function handleAdminErr(e){
   if(e && e.auth){
@@ -366,15 +374,16 @@ function renderDishList(){
   list.forEach((d,i)=>{
     const card = document.createElement('div');
     card.className='card';
-    card.innerHTML = `<div class="name">${d.type==='заготовка'?'<span class="badge">заготовка</span>':''}${esc(d.name)}</div>
+    const ph = PHOTOS[d.id];
+    card.innerHTML = (ph ? `<img class="dthumb" loading="lazy" alt="" src="${photoUrl(ph,200)}" onerror="this.remove()">` : '') + `<div class="name">${d.type==='заготовка'?'<span class="badge">заготовка</span>':''}${esc(d.name)}</div>
       <div class="meta">${esc(d.station)}${d.time?' · '+esc(d.time):''}${d.yield?' · выход '+esc(d.yield)+' кг':''}</div>
-      <div class="detail" id="det${i}"></div>`;
+      <div class="detail" id="det${i}" style="clear:both"></div>`;
     card.onclick = ()=>{
       const det = card.querySelector('.detail');
       const isOpen = det.classList.contains('open');
       document.querySelectorAll('.detail.open').forEach(x=>x.classList.remove('open'));
       if(!isOpen){
-        det.innerHTML = d.ingredients.map(ing=>`<div class="ing-row"><span>${esc(ing.name)}</span><span><b>${fmtQty(ing.unit, ing.netto)}</b></span></div>`).join('')
+        det.innerHTML = (ph ? `<img class="dish-photo" alt="${esc(d.name)}" src="${photoUrl(ph,1000)}" onerror="this.remove()">` : '') + d.ingredients.map(ing=>`<div class="ing-row"><span>${esc(ing.name)}</span><span><b>${fmtQty(ing.unit, ing.netto)}</b></span></div>`).join('')
           + (d.method ? `<div class="method">${esc(d.method)}</div>` : '');
         det.classList.add('open');
       }
@@ -603,6 +612,15 @@ async function loadResults(){
 
 // ---------- DB / DISHES LOADING ----------
 let SERVER_DISH_COUNT = null;
+async function loadPhotos(){
+  try{
+    const j = await apiGet('photos');
+    if(j && j.photos){ PHOTOS = j.photos; try{ localStorage.setItem('photosCache', JSON.stringify(PHOTOS)); }catch(e){} }
+    renderDishList();
+    const adm = document.getElementById('adminScreen');
+    if(adm && adm.style.display!=='none' && typeof renderAdminDishes==='function') renderAdminDishes();
+  }catch(e){ console.error('load photos failed', e); }
+}
 async function loadDishesFromDb(){
   try{
     const j = await apiGet('dishes');
@@ -622,7 +640,7 @@ async function importSeedIfEmpty(){
     if(j.imported){ SERVER_DISH_COUNT = j.imported; await loadDishesFromDb(); }
   }catch(e){ console.error('import seed failed', e); }
 }
-loadDishesFromDb();
+loadDishesFromDb().then(loadPhotos);
 
 // ---------- ENTRY (простой вход + отдельная дверь для админа) ----------
 (function(){
@@ -734,6 +752,7 @@ async function loadAdminDishes(){
   setAdminStatus('Загружаю тех.карты с сервера…');
   await loadDishesFromDb();
   await importSeedIfEmpty();
+  loadPhotos();
   await loadExtraProducts();
   renderAdminDishes();
   setAdminStatus(SERVER_DISH_COUNT===null ? ('Показаны сохранённые тех.карты: ' + (LAST_API_ERROR || 'сервер не ответил') + '. Нажмите «обновить».') : '');
@@ -758,7 +777,7 @@ function renderAdminDishes(){
     row.className = 'card row';
     row.innerHTML = `<div>
         <div class="name">${d.type==='заготовка'?'<span class="badge">заготовка</span>':''}${esc(d.name)}</div>
-        <div class="meta">${esc(d.station)} · ${d.ingredients.length} ингредиентов</div>
+        <div class="meta">${esc(d.station)} · ${d.ingredients.length} ингредиентов${PHOTOS[d.id]?' · 📷 фото':''}</div>
       </div>
       <div style="display:flex; gap:8px;">
         <button class="ghost-btn" data-edit style="width:auto; padding:8px 12px;">Изменить</button>
@@ -876,6 +895,19 @@ function openNewProductForm(prefillName, onPick){
   render();
 }
 
+function shrinkPhoto(file, maxSide, quality){
+  return new Promise((resolve, reject)=>{
+    const url = URL.createObjectURL(file); const img = new Image();
+    img.onload = ()=>{
+      const k = Math.min(1, maxSide / Math.max(img.naturalWidth, img.naturalHeight));
+      const c = document.createElement('canvas'); c.width = Math.round(img.naturalWidth*k); c.height = Math.round(img.naturalHeight*k);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(url);
+      resolve(c.toDataURL('image/jpeg', quality).split(',')[1]);
+    };
+    img.onerror = ()=>{ URL.revokeObjectURL(url); reject(new Error('не удалось открыть фото')); };
+    img.src = url;
+  });
+}
 function openDishEditor(dish){
   const isNew = !dish;
   const d = dish ? JSON.parse(JSON.stringify(dish)) : {id:null, name:'', section:'', station:'Вок', type:'блюдо', method:'', yield:null, time:null, ingredients:[{name:'',unit:'кг',netto:0}]};
@@ -926,6 +958,16 @@ function openDishEditor(dish){
           <button type="button" class="pill ${d.type==='заготовка'?'active':''}" data-type="заготовка">Заготовка</button>
         </div>
       </div>
+      <div class="setup-field"><label>Фото блюда</label>
+        ${isNew ? '<div class="ph-note">Фото можно добавить после сохранения тех.карты.</div>' : `<div class="ph-box">
+          ${PHOTOS[d.id] ? `<img src="${photoUrl(PHOTOS[d.id],300)}" alt="">` : '<div class="ph-note">Фото пока нет.</div>'}
+          <div style="display:flex; flex-direction:column; gap:6px;">
+            <button type="button" class="ghost-btn" id="phPick" style="width:auto; padding:8px 12px;">📷 ${PHOTOS[d.id]?'Заменить фото':'Добавить фото'}</button>
+            ${PHOTOS[d.id] ? '<button type="button" class="linkbtn" id="phDel" style="color:#c0453a; padding:0;">Удалить фото</button>' : ''}
+          </div>
+          <input type="file" id="phFile" accept="image/*" style="display:none">
+        </div><div class="ph-note" id="phMsg" style="margin-top:6px;"></div>`}
+      </div>
       <div class="setup-field"><label>Ингредиенты и граммовка</label><div id="ingList">${ingredientsHtml()}</div>
         <button class="linkbtn" id="addIngBtn">+ Добавить ингредиент</button>
       </div>
@@ -974,6 +1016,26 @@ function openDishEditor(dish){
     });
 
     if(!isNew){
+      const phMsg = root.querySelector('#phMsg');
+      const phFile = root.querySelector('#phFile');
+      root.querySelector('#phPick').onclick = ()=>{ syncFromForm(); phFile.click(); };
+      phFile.onchange = async ()=>{
+        const f = phFile.files && phFile.files[0]; if(!f) return;
+        phMsg.textContent = 'Загружаю фото…';
+        try{
+          const data = await shrinkPhoto(f, 1280, 0.82);
+          const j = await apiPost({action:'savePhoto', code:getAdminCode(), id:d.id, name:d.name, data});
+          PHOTOS[d.id] = j.fileId; try{ localStorage.setItem('photosCache', JSON.stringify(PHOTOS)); }catch(e){}
+          renderDishList(); render();
+        }catch(e){ if(e && e.auth){ handleAdminErr(e); return; } phMsg.textContent = 'Не удалось загрузить фото: ' + (e && e.message || 'нет связи'); }
+      };
+      const phDel = root.querySelector('#phDel');
+      if(phDel) phDel.onclick = async ()=>{
+        if(!confirm('Удалить фото у «'+d.name+'»?')) return;
+        syncFromForm(); phMsg.textContent = 'Удаляю…';
+        try{ await apiPost({action:'deletePhoto', code:getAdminCode(), id:d.id}); delete PHOTOS[d.id]; try{ localStorage.setItem('photosCache', JSON.stringify(PHOTOS)); }catch(e){} renderDishList(); render(); }
+        catch(e){ if(e && e.auth){ handleAdminErr(e); return; } phMsg.textContent = 'Не удалось удалить: ' + (e && e.message || 'нет связи'); }
+      };
       root.querySelector('#dDeleteBtn').onclick = async ()=>{
         if(!confirm('Точно удалить тех.карту «'+d.name+'»?')) return;
         try{ await apiPost({action:'deleteDish', code:getAdminCode(), id:d.id}); }
