@@ -168,7 +168,7 @@ textarea{resize:vertical;}
   <div class="msg" id="entryMsg" style="color:#c0453a; font-size:13px; margin-top:8px; min-height:16px;"></div>
   <button class="tile dark wide" data-sec="chef" style="margin-top:18px; width:100%;"><span class="ti">👨‍🍳</span>Для шефа и су-шефа</button>
   <button class="linkbtn" id="showAdminLoginBtn" style="display:block; margin:12px auto 0;">🔐 Я администратор</button>
-  <div style="text-align:center; color:#9aa79f; font-size:11px; margin-top:8px;">версия 12</div>
+  <div style="text-align:center; color:#9aa79f; font-size:11px; margin-top:8px;">версия 13</div>
 </div>
 
 <div id="adminLoginScreen" style="display:none; max-width:420px; margin:40px auto; padding:20px;">
@@ -244,7 +244,7 @@ textarea{resize:vertical;}
 <div id="adminScreen" style="display:none;">
   <div class="wrap">
     <div style="display:flex; justify-content:space-between; align-items:flex-start;">
-      <h1>Тех.карты (админ) <span style="font-size:11px; color:#9aa79f; font-weight:400;">v12</span></h1>
+      <h1>Тех.карты (админ) <span style="font-size:11px; color:#9aa79f; font-weight:400;">v13</span></h1>
       <button class="tab" id="adminLogoutBtn" style="width:auto; padding:8px 12px;">Выйти</button>
     </div>
 
@@ -775,9 +775,12 @@ function renderAdminDishes(){
   list.forEach(d=>{
     const row = document.createElement('div');
     row.className = 'card row';
-    row.innerHTML = `<div>
+    row.innerHTML = `<div style="display:flex; align-items:center; gap:12px; min-width:0;">
+        ${PHOTOS[d.id] ? `<img loading="lazy" alt="" src="${photoUrl(PHOTOS[d.id],200)}" onerror="this.remove()" style="width:56px;height:56px;border-radius:10px;object-fit:cover;flex:none;background:#eef1ef;">` : ''}
+        <div style="min-width:0;">
         <div class="name">${d.type==='заготовка'?'<span class="badge">заготовка</span>':''}${esc(d.name)}</div>
-        <div class="meta">${esc(d.station)} · ${d.ingredients.length} ингредиентов${PHOTOS[d.id]?' · 📷 фото':''}</div>
+        <div class="meta">${esc(d.station)} · ${d.ingredients.length} ингредиентов</div>
+        </div>
       </div>
       <div style="display:flex; gap:8px;">
         <button class="ghost-btn" data-edit style="width:auto; padding:8px 12px;">Изменить</button>
